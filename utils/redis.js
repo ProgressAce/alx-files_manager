@@ -2,6 +2,7 @@
 
 import { createClient } from 'redis';
 
+// handles the mongo database(db) client connection
 class RedisClient {
   constructor() {
     this.client = createClient();
@@ -13,10 +14,21 @@ class RedisClient {
     });
   }
 
+  /**
+   * Checks if redis connection is active.
+   * @returns true, if the db client connection is active
+   * otherwise false.
+   */
   isAlive() {
     return this.connected;
   }
 
+  /**
+   * Finds the value of the key in Redis
+   * @param {String} key the variable reference
+   * @returns if found, the value associated with the key
+   * otherwise null.
+   */
   async get(key) {
     // promise ensuring redisGet command finishes execution before returning
     const redisGetPromise = new Promise((resolve, reject) => {
