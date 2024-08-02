@@ -74,6 +74,44 @@ class DBClient {
       return null;
     }
   }
+
+  /**
+   * Returns one document in users collection matching the filter.
+   * @param {object} query the filter to find the document.
+   */
+  async findOneUser(query) {
+    try {
+      if (typeof query !== 'object') return null;
+
+      const user = await this.users.findOne(query);
+      return user;
+
+    } catch (error) {
+      console.log('findOne error:', error);
+    }
+  }
+
+  /** 
+   * Adds a new user to the database.
+   * 
+   * The email and password are not checked for validity.
+   * The email is expected to have been validated and the password hashed
+   * beforehand.
+   * @param {string} email email of the user
+   * @param {string} password password of the user
+   * @returns 
+   */
+  async insertOneUser(email, password) {
+    try {
+      if (!email || !password) return 0;
+
+      const result = await this.users.insertOne({email, password});
+      return result;
+
+    } catch (error) {
+      console.log('insertOneUser error:', error);
+    }
+  }
 }
 
 const host = process.env.DB_HOST || 'localhost';
