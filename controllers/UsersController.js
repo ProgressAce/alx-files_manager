@@ -1,6 +1,8 @@
 // Handles the definitions for user endpoints.
 const sha1 = require('sha1');
 const dbClient = require('../utils/db');
+const redisClient = require('../utils/redis');
+const { ObjectId } = require('mongodb/lib/core/index').BSON
 
 class UsersController {
   /**
@@ -30,6 +32,30 @@ class UsersController {
     if (!result.result.ok) return res.status(500).json({'error': 'Server-side error occured'});
 
     res.status(201).json({ 'id': result.insertedId, email });
+  }
+
+  /**
+   * Gets a user's details based on the given token.
+   * Requires authentication.
+   * @param {import('express').Request} req the http request
+   * @param {import('express').Response} res the http response
+   * @returns {JSON}
+   */
+  async getMe(req, res) {
+    const token = req.header('X-Token');
+    if (!token) return res.status(401).json({'error': 'Unauthorized'});
+
+    try {
+      const userId = await redisClient.get(`auth_${token}`);
+      if (!userId) return res.status(401).json({'error': 'Unauthorized'});
+
+      const user = await dbClient.findOneUser({'_id': ObjectId(userId)});
+      res.status(200).json({'id': user._id, 'email': user.email});
+      
+    } catch (error) {
+      console.log('<<<getMe error>>>:', error);
+      res.status(500).json({'error': 'Server-side error'});
+    }
   }
 }
 
