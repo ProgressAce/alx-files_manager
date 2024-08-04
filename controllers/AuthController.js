@@ -41,7 +41,6 @@ class AuthController {
 
     try {
       await redisClient.set(key, userId, 24 * 60 * 60 * 1);
-      console.log('from getConnect:', await redisClient.get(key));
     } catch (error) {
       return res.status(500).json({'error': 'Server-side error'});
     }
