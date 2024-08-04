@@ -112,6 +112,49 @@ class DBClient {
       console.log('insertOneUser error:', error);
     }
   }
+
+  /**
+   * Returns one document in files collection matching the filter.
+   * @param {object} query the filter to find the document.
+   */
+  async findOneFile(query) {
+    try {
+      if (typeof query !== 'object') return null;
+
+      const user = await this.files.findOne(query);
+      return user;
+
+    } catch (error) {
+      console.log('findOne error:', error);
+    }
+  }
+
+  /** 
+   * Adds a new file document to the files collection in the database.
+   * 
+   * The validity of the object's attributes are expected to be checked
+   * beforehand.
+   * @param {object} documentObject the file to insert
+   * @returns 1 for success, otherwise 0.
+   */
+  async insertOneFile(documentObject) {
+    try {
+      if (!documentObject || typeof documentObject !== 'object') return 0;
+      
+      // folders should not have a data property
+      if (documentObject.type === 'folder') {
+        if (documentObject.hasOwnProperty('data')) {
+          delete documentObject.data;
+        }
+      }
+
+      const result = await this.files.insertOne(documentObject);
+      return result;
+
+    } catch (error) {
+      console.log('insertOneUser error:', error);
+    }
+  }
 }
 
 const host = process.env.DB_HOST || 'localhost';
