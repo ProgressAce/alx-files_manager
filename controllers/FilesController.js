@@ -217,6 +217,84 @@ class FilesController {
 
     res.status(200).json(files);
   }
+
+  /**
+   * Sets a file's isPublic field to true.
+   * 
+   * Authorization is required.
+   * @param {import('express').Request} req the http request
+   * @param {import('express').Response} res the http response
+   * @returns {JSON}
+   */
+  async putPublish(req, res) {
+    const token = req.header('X-Token');
+    const { id } = req.params;
+
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    let file;
+
+    try {
+      file = await dbClient.files.findOneAndUpdate(
+        { _id: ObjectId(id), userId },
+        { $set: {isPublic: true} },
+        { returnDocument: 'after', upsert: false }
+      );
+    } catch {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    file = file.value;
+
+    res.status(200).json({
+      id: file._id,
+      userId: file.userId,
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId,
+    });
+  }
+
+  /**
+   * Sets a file's isPublic field to false.
+   * 
+   * Authorization is required.
+   * @param {import('express').Request} req the http request
+   * @param {import('express').Response} res the http response
+   * @returns {JSON}
+   */
+  async putUnpublish(req, res) {
+    const token = req.header('X-Token');
+    const { id } = req.params;
+
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    let file;
+
+    try {
+      file = await dbClient.files.findOneAndUpdate(
+        { _id: ObjectId(id), userId },
+        { $set: {isPublic: false} },
+        { returnDocument: 'after', upsert: false }
+      );
+    } catch {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    file = file.value;
+
+    res.status(200).json({
+      id: file._id,
+      userId: file.userId,
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId,
+    });
+  }
 }
 
 const filesController = new FilesController();
