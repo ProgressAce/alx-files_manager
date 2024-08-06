@@ -1,5 +1,6 @@
 // Forms the MongoDB client connection and interaction.
 const MongoClient = require('mongodb/lib/mongo_client');
+const { isObject } = require('mongodb/lib/utils');
 
 /**
  * Represents the database connection.
@@ -125,7 +126,7 @@ class DBClient {
       return user;
 
     } catch (error) {
-      console.log('findOne error:', error);
+      console.log('findOneFile error:', error);
     }
   }
 
@@ -153,6 +154,36 @@ class DBClient {
 
     } catch (error) {
       console.log('insertOneUser error:', error);
+    }
+  }
+
+  /**
+   * Returns an aggregation cursor that finds all the files of a user
+   * according to the given query.
+   * 
+   * Pagination is applied by making use of the aggregate method.
+   * @param {object} query the filter to find each document.
+   * @param {number} pageNumber the index number to start fetching the documents at.
+   */
+  async findUserFiles(query, pageNumber) {
+    const pageSize = 20;
+
+    try {
+      if (typeof query !== 'object') return null;
+
+      // Pipeline for fetching paginated results
+      let pipeline = [
+        { $match: query },
+        { $skip: pageNumber * pageSize },
+        { $limit: pageSize },
+      ];
+
+      const fileAggregationCursor = this.files.aggregate(pipeline);
+
+      return fileAggregationCursor;
+
+    } catch (error) {
+      console.log('findUserFiles error:', error);
     }
   }
 }
