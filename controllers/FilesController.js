@@ -2,11 +2,9 @@
 const fs = require('fs');
 const mime = require('mime-types');
 const uuid = require('uuid');
+const { ObjectId } = require('mongodb/lib/core/index').BSON;
 const dbClient = require('../utils/db');
 const redisClient = require('../utils/redis');
-
-const { ObjectId } = require('mongodb/lib/core/index').BSON;
-
 
 class FilesController {
   /**
@@ -217,7 +215,7 @@ class FilesController {
 
   /**
    * Sets a file's isPublic field to true.
-   * 
+   *
    * Authorization is required.
    * @param {import('express').Request} req the http request
    * @param {import('express').Response} res the http response
@@ -235,12 +233,13 @@ class FilesController {
     try {
       file = await dbClient.files.findOneAndUpdate(
         { _id: ObjectId(id), userId: ObjectId(userId) },
-        { $set: {isPublic: true} },
-        { returnDocument: 'after', upsert: false }
+        { $set: { isPublic: true } },
+        { returnDocument: 'after', upsert: false },
       );
 
       if (!file) throw Error('file document not found');
-    } catch {
+    } catch (error) {
+      console.log('FilesController putPublish error:', error);
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -258,7 +257,7 @@ class FilesController {
 
   /**
    * Sets a file's isPublic field to false.
-   * 
+   *
    * Authorization is required.
    * @param {import('express').Request} req the http request
    * @param {import('express').Response} res the http response
@@ -276,12 +275,13 @@ class FilesController {
     try {
       file = await dbClient.files.findOneAndUpdate(
         { _id: ObjectId(id), userId: ObjectId(userId) },
-        { $set: {isPublic: false} },
-        { returnDocument: 'after', upsert: false }
+        { $set: { isPublic: false } },
+        { returnDocument: 'after', upsert: false },
       );
 
       if (!file) throw Error('file document not found');
-    } catch {
+    } catch (error) {
+      console.log('FilesController putUnpublish error:', error);
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -295,6 +295,50 @@ class FilesController {
       isPublic: file.isPublic,
       parentId: file.parentId,
     });
+  }
+
+  /**
+   * Returns the content of a file document.
+   *
+   * The file is determined by the id provided as a parameter in the url.
+   * Authorization is required.
+   * @param {import('express').Request} req the http request
+   * @param {import('express').Response} res the http response
+   * @returns {JSON}
+   */
+  static async getFile(req, res) {
+    const token = req.header('X-Token');
+    const { id } = req.params; // the file's identifier
+
+    const userId = await redisClient.get(`auth_${token}`);
+
+    const file = await dbClient.findOneFile({ _id: ObjectId(id) });
+    if (!file) return res.status(404).json({ error: 'Not found' });
+
+    // check if the file is public for viewing without authorization
+    if (!userId && file.isPublic === false) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    if (file.type === 'folder') {
+      return res.status(400).json({ error: 'A folder doesn\'t have content' });
+    }
+
+    // check if the file exists locally
+    if (!fs.existsSync(file.localPath)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const mimeType = mime.contentType(file.name);
+    res.setHeader('Content-Type', mimeType);
+
+    try {
+      const fileData = fs.readFileSync(file.localPath, { encoding: 'utf8' });
+      return res.status(200).json(fileData);
+    } catch (error) {
+      console.log('FilesController getFile error:', error.message);
+      return res.status(500).json({ error: 'Server-side error' });
+    }
   }
 }
 
