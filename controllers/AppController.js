@@ -8,13 +8,13 @@ class AppController {
    * @param {import('express').Request} req the http request
    * @param {import('express').Response} res the http response
    */
-  getStatus(req, res) {
+  static getStatus(req, res) {
     const status = {
-        "redis": redisClient.isAlive(),
-        "db": dbClient.isAlive()
-    }
+      redis: redisClient.isAlive(),
+      db: dbClient.isAlive(),
+    };
 
-    res.status(200).json(status);
+    return res.status(200).json(status);
   }
 
   /**
@@ -22,16 +22,14 @@ class AppController {
    * @param {import('express').Request} req the http request
    * @param {import('express').Response} res the http response
    */
-  async getStats(req, res) {
+  static async getStats(req, res) {
     const stats = {
-      "users": await dbClient.nbUsers(),
-      "files": await dbClient.nbFiles()
-    }
+      users: await dbClient.nbUsers(),
+      files: await dbClient.nbFiles(),
+    };
 
-    res.status(200).json(stats);
+    return res.status(200).json(stats);
   }
 }
 
-const appController = new AppController();
-
-module.exports = appController;
+module.exports = AppController;
