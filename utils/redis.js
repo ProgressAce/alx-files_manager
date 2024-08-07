@@ -25,16 +25,16 @@ class RedisClient {
 
   /**
    * Obtains the value of the key, stored in Redis.
-   * @param {string} key 
+   * @param {string} key
    * @returns the value of the key.
    */
   async get(key) {
     try {
       const value = await this.getPromise(key);
       return value;
-
     } catch (error) {
       console.log('RedisClient getPromise error:', error);
+      return null;
     }
   }
 
@@ -47,7 +47,6 @@ class RedisClient {
   async set(key, value, duration) {
     try {
       await this.setPromise(key, value, 'EX', duration);
-
     } catch (error) {
       console.log('RedisClient setPromise error:', error);
     }
@@ -60,7 +59,6 @@ class RedisClient {
   async del(key) {
     try {
       await this.delPromise(key);
-
     } catch (error) {
       console.log('RedisClient delPromise error:', error);
     }
