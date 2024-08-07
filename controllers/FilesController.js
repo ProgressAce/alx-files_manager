@@ -1,9 +1,12 @@
 // Handles the functionality for endpoints concerning files
+const fs = require('fs');
+const mime = require('mime-types');
+const uuid = require('uuid');
 const dbClient = require('../utils/db');
 const redisClient = require('../utils/redis');
-const fs = require('fs');
+
 const { ObjectId } = require('mongodb/lib/core/index').BSON;
-const uuid = require('uuid');
+
 
 class FilesController {
   /**
@@ -18,22 +21,18 @@ class FilesController {
    * @param {string} data the file data argument
    */
   static async postUploadValidate(res, req, name, type, parentId, isPublic, data) {
-    // return new Promise((resolve, reject) => {
     if (!name) {
-      // reject();
       res.status(400).json({ error: 'Missing name' });
       return 0;
     }
 
     const typeList = ['folder', 'file', 'image'];
     if (!type || !(typeList.includes(type))) {
-      // reject();
       res.status(400).json({ error: 'Missing type' });
       return 0;
     }
 
     if (!data && type !== 'folder') {
-      // reject();
       res.status(400).json({ error: 'Missing data' });
       return 0;
     }
@@ -52,14 +51,13 @@ class FilesController {
           return 0;
         }
       } catch (error) {
-        console.log('postUploadValidate findOne error:', error);
+        // console.log('postUploadValidate findOne error:', error);
         res.status(500).json({ error: 'Server-side error' });
         return 0;
       }
     }
 
     return 1;
-    // });
   }
 
   /**
@@ -69,14 +67,14 @@ class FilesController {
    * @param {import('express').Response} res the http response
    * @returns {JSON}
    */
-  async postUpload(req, res) {
+  static async postUpload(req, res) {
     const token = req.header('X-Token');
 
     const userId = await redisClient.get(`auth_${token}`);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { name, type, parentId } = req.body;
-    const { isPublic, data } = req.body;
+    const { name, type, parentId = 0 } = req.body;
+    const { isPublic = false, data } = req.body;
 
     // checks argument validity and sends a response accordingly
     const argsValid = await FilesController.postUploadValidate(
@@ -85,11 +83,11 @@ class FilesController {
     if (!argsValid) return;
 
     const file = {
-      userId,
+      userId: ObjectId(userId),
       name,
       type,
-      parentId: parentId || 0,
-      isPublic: isPublic || false,
+      parentId,
+      isPublic,
     };
 
     const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
@@ -108,11 +106,11 @@ class FilesController {
 
         return res.status(201).json({
           id: file._id,
-          userId,
-          name,
-          type,
-          isPublic,
-          parentId,
+          userId: file.userId,
+          name: file.name,
+          type: file.type,
+          isPublic: file.isPublic,
+          parentId: file.parentId,
         });
       }
 
@@ -134,12 +132,11 @@ class FilesController {
 
       return res.status(201).json({
         id: file._id,
-        userId,
-        name,
-        type,
-        isPublic,
-        parentId,
-        localPath,
+        userId: file.userId,
+        name: file.name,
+        type: file.type,
+        isPublic: file.isPublic,
+        parentId: file.parentId,
       });
     } catch (error) {
       return res.status(500).json({ error: 'Server-side error occured' });
@@ -154,17 +151,17 @@ class FilesController {
    * @param {import('express').Response} res the http response
    * @returns {JSON}
    */
-  async getShow(req, res) {
+  static async getShow(req, res) {
     const token = req.header('X-Token');
     const { id } = req.params;
 
     const userId = await redisClient.get(`auth_${token}`);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const file = await dbClient.findOneFile({ _id: ObjectId(id), userId });
+    const file = await dbClient.findOneFile({ _id: ObjectId(id), userId: ObjectId(userId) });
     if (!file) return res.status(404).json({ error: 'Not found' });
 
-    res.status(200).json({
+    return res.status(200).json({
       id: file._id,
       userId,
       name: file.name,
@@ -181,7 +178,7 @@ class FilesController {
    * @param {import('express').Response} res the http response
    * @returns {JSON}
    */
-  async getIndex(req, res) {
+  static async getIndex(req, res) {
     const token = req.header('X-Token');
 
     const userId = await redisClient.get(`auth_${token}`);
@@ -199,7 +196,7 @@ class FilesController {
 
     const files = [];
     const query = {
-      userId,
+      userId: ObjectId(userId),
       parentId,
     };
     const fileAggregationCursor = await dbClient.findUserFiles(query, page);
@@ -215,7 +212,7 @@ class FilesController {
       });
     }
 
-    res.status(200).json(files);
+    return res.status(200).json(files);
   }
 
   /**
@@ -226,7 +223,7 @@ class FilesController {
    * @param {import('express').Response} res the http response
    * @returns {JSON}
    */
-  async putPublish(req, res) {
+  static async putPublish(req, res) {
     const token = req.header('X-Token');
     const { id } = req.params;
 
@@ -237,17 +234,19 @@ class FilesController {
 
     try {
       file = await dbClient.files.findOneAndUpdate(
-        { _id: ObjectId(id), userId },
+        { _id: ObjectId(id), userId: ObjectId(userId) },
         { $set: {isPublic: true} },
         { returnDocument: 'after', upsert: false }
       );
+
+      if (!file) throw Error('file document not found');
     } catch {
       return res.status(404).json({ error: 'Not found' });
     }
 
     file = file.value;
 
-    res.status(200).json({
+    return res.status(200).json({
       id: file._id,
       userId: file.userId,
       name: file.name,
@@ -265,7 +264,7 @@ class FilesController {
    * @param {import('express').Response} res the http response
    * @returns {JSON}
    */
-  async putUnpublish(req, res) {
+  static async putUnpublish(req, res) {
     const token = req.header('X-Token');
     const { id } = req.params;
 
@@ -276,17 +275,19 @@ class FilesController {
 
     try {
       file = await dbClient.files.findOneAndUpdate(
-        { _id: ObjectId(id), userId },
+        { _id: ObjectId(id), userId: ObjectId(userId) },
         { $set: {isPublic: false} },
         { returnDocument: 'after', upsert: false }
       );
+
+      if (!file) throw Error('file document not found');
     } catch {
       return res.status(404).json({ error: 'Not found' });
     }
 
     file = file.value;
 
-    res.status(200).json({
+    return res.status(200).json({
       id: file._id,
       userId: file.userId,
       name: file.name,
@@ -297,6 +298,4 @@ class FilesController {
   }
 }
 
-const filesController = new FilesController();
-
-module.exports = filesController;
+module.exports = FilesController;
