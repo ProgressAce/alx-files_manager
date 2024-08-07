@@ -1,4 +1,5 @@
 // Handles the functionality for endpoints concerning files
+const Bull = require('bull');
 const fs = require('fs');
 const mime = require('mime-types');
 const uuid = require('uuid');
@@ -78,7 +79,7 @@ class FilesController {
     const argsValid = await FilesController.postUploadValidate(
       res, req, name, type, parentId, isPublic, data,
     );
-    if (!argsValid) return;
+    if (!argsValid) return null;
 
     const file = {
       userId: ObjectId(userId),
@@ -126,6 +127,14 @@ class FilesController {
       const result = await dbClient.insertOneFile(file);
       if (!result || !result.result.ok) {
         return res.status(500).json({ error: 'Server-side error occured' });
+      }
+
+      if (file.type.type === 'image') {
+        const fileQueue = new Bull('fileQueue');
+        fileQueue.add('thumbnail generation', {
+          userId: file.userId,
+          fileId: file._id,
+        });
       }
 
       return res.status(201).json({
@@ -309,6 +318,7 @@ class FilesController {
   static async getFile(req, res) {
     const token = req.header('X-Token');
     const { id } = req.params; // the file's identifier
+    const { size } = req.query;
 
     const userId = await redisClient.get(`auth_${token}`);
 
@@ -329,11 +339,25 @@ class FilesController {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const mimeType = mime.contentType(file.name);
+    let filePath = file.localPath;
+    let fileName = file.name;
+
+    if (file.type === 'image') {
+      if (size) {
+        if (['100', '250', '500'].includes(size)) {
+          filePath += `_${size}`;
+          fileName += `_${size}`;
+        } else {
+          return res.status(400).json({ error: 'Wrong image size' });
+        }
+      }
+    }
+
+    const mimeType = mime.contentType(fileName);
     res.setHeader('Content-Type', mimeType);
 
     try {
-      const fileData = fs.readFileSync(file.localPath, { encoding: 'utf8' });
+      const fileData = fs.readFileSync(filePath);
       return res.status(200).json(fileData);
     } catch (error) {
       console.log('FilesController getFile error:', error.message);
